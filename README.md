@@ -1,1 +1,1 @@
-React + API + LiveSearch
+React + API + LiveSearch + CSS + HTML + Node + Javascript
