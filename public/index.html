@@ -1,43 +1,252 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="Web site created using create-react-app"
-    />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Busca de Livros — Descubra + Live Search (OpenLibrary)</title>
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>React App</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+  <!-- Estilo -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React via CDN (sem build) -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <main class="max-w-5xl mx-auto py-14 px-6">
+    <h1 class="text-4xl font-extrabold tracking-tight text-gray-900 mb-2">Busca de Livros</h1>
+    <p class="text-gray-600 mb-8">OpenLibrary API — pesquise por títulos e autores, ou descubra por assunto.</p>
+
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
+  </main>
 
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
+  <script type="text/babel" data-presets="react">
+    // Utils
+    const useDebounced = (value, delay = 350) => {
+      const [d, setD] = React.useState(value);
+      React.useEffect(() => { const id = setTimeout(()=>setD(value), delay); return ()=>clearTimeout(id); }, [value, delay]);
+      return d;
+    };
+    const highlight = (text, q) => {
+      if (!q) return text;
+      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const parts = String(text).split(new RegExp(`(${esc})`, "ig"));
+      return parts.map((p,i) =>
+        p.toLowerCase()===q.toLowerCase()
+          ? <mark key={i} className="bg-yellow-200 rounded px-0.5">{p}</mark>
+          : <React.Fragment key={i}>{p}</React.Fragment>
+      );
+    };
+    const saveRecent = (q) => {
+      if (!q) return;
+      const key = "recent_book_searches";
+      const arr = JSON.parse(localStorage.getItem(key) || "[]").filter(x => x !== q);
+      arr.unshift(q);
+      localStorage.setItem(key, JSON.stringify(arr.slice(0,6)));
+    };
+    const loadRecent = () => JSON.parse(localStorage.getItem("recent_book_searches") || "[]");
 
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
-  </body>
+    // ---- Chips de exemplo / recentes
+    function Chips({ items, onClick, title }) {
+      if (!items?.length) return null;
+      return (
+        <div className="mb-4">
+          {title && <p className="text-sm text-gray-500 mb-2">{title}</p>}
+          <div className="flex flex-wrap gap-2">
+            {items.map((t) => (
+              <button key={t}
+                onClick={()=>onClick(t)}
+                className="px-3 py-1.5 text-sm rounded-full bg-white border border-gray-200 hover:border-gray-300 shadow-sm">
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ---- Cards horizontais de "Descubra por assunto"
+    function SubjectRow({ subject, title, onPick }) {
+      const [items, setItems] = React.useState([]);
+      const [loading, setLoading] = React.useState(true);
+
+      React.useEffect(() => {
+        (async () => {
+          try {
+            const res = await fetch(`https://openlibrary.org/subjects/${encodeURIComponent(subject)}.json?limit=12`);
+            const json = await res.json();
+            const mapped = (json.works || []).map(w => ({
+              id: w.key,
+              title: w.title,
+              author: (w.authors && w.authors[0]?.name) || "Autor desconhecido",
+              cover: w.cover_id ? `https://covers.openlibrary.org/b/id/${w.cover_id}-M.jpg` : null,
+              url: `https://openlibrary.org${w.key}`
+            }));
+            setItems(mapped);
+          } catch(e) {
+            setItems([]);
+          } finally {
+            setLoading(false);
+          }
+        })();
+      }, [subject]);
+
+      return (
+        <section className="mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+            <button onClick={()=>onPick(subject)} className="text-sm text-indigo-600 hover:underline">ver mais por “{subject}”</button>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 overflow-x-auto">
+            {loading ? (
+              <p className="text-gray-500">Carregando…</p>
+            ) : items.length ? (
+              <div className="flex gap-4 min-w-min">
+                {items.map(b => (
+                  <a key={b.id} href={b.url} target="_blank" rel="noreferrer"
+                     className="w-44 flex-shrink-0 bg-white border border-gray-100 rounded-xl hover:shadow-md transition">
+                    <div className="h-56 w-full bg-gray-100 rounded-t-xl overflow-hidden grid place-items-center">
+                      {b.cover
+                        ? <img src={b.cover} alt={`Capa de ${b.title}`} className="w-full h-full object-cover"/>
+                        : <span className="text-xs text-gray-400">sem capa</span>}
+                    </div>
+                    <div className="p-3">
+                      <h4 className="font-medium text-gray-900 line-clamp-2">{b.title}</h4>
+                      <p className="text-sm text-gray-500 line-clamp-1">{b.author}</p>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">Nada encontrado.</p>
+            )}
+          </div>
+        </section>
+      );
+    }
+
+    // ---- Live Search
+    function LiveSearch() {
+      const [q, setQ] = React.useState("");
+      const [results, setResults] = React.useState([]);
+      const [loading, setLoading] = React.useState(false);
+      const [error, setError] = React.useState("");
+      const [active, setActive] = React.useState(0);
+      const [recent, setRecent] = React.useState(loadRecent());
+      const debounced = useDebounced(q);
+
+      React.useEffect(() => {
+        if (!debounced || debounced.length < 2) {
+          setResults([]); setError(""); return;
+        }
+        const controller = new AbortController();
+        (async () => {
+          try {
+            setLoading(true); setError("");
+            const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(debounced)}&limit=12`;
+            const res = await fetch(url, { signal: controller.signal });
+            if (!res.ok) throw new Error("Falha ao buscar livros");
+            const data = await res.json();
+
+            const mapped = (data.docs || []).map(d => ({
+              title: d.title || "Sem título",
+              author: (d.author_name && d.author_name[0]) || "Autor desconhecido",
+              year: d.first_publish_year || "—",
+              url: d.key ? `https://openlibrary.org${d.key}` : "https://openlibrary.org",
+              cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-S.jpg` : null
+            }));
+            setResults(mapped); setActive(0);
+          } catch (e) {
+            if (e.name !== "AbortError") setError("Não foi possível carregar os resultados.");
+          } finally { setLoading(false); }
+        })();
+        return () => controller.abort();
+      }, [debounced]);
+
+      const onKeyDown = (e) => {
+        if (!results.length) return;
+        if (e.key === "ArrowDown") { e.preventDefault(); setActive(i => (i + 1) % results.length); }
+        if (e.key === "ArrowUp")   { e.preventDefault(); setActive(i => (i - 1 + results.length) % results.length); }
+        if (e.key === "Enter")     { window.open(results[active].url, "_blank"); saveRecent(q); setRecent(loadRecent()); }
+      };
+
+      const setFromChip = (text) => { setQ(text); document.getElementById("search").focus(); };
+
+      return (
+        <>
+          {/* caixa de busca com relevo */}
+          <section className="bg-white rounded-2xl shadow-lg border border-gray-100">
+            <div className="p-5 border-b">
+              <label htmlFor="search" className="sr-only">Buscar livros</label>
+              <input
+                id="search"
+                value={q}
+                onChange={(e)=>setQ(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Busque títulos, autores… (ex.: javascript, design, romance)"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-xs text-gray-500 mt-2">↑/↓ navega • Enter abre • mínimo 2 letras</p>
+            </div>
+
+            {/* estados */}
+            {loading && <p className="p-5 text-gray-600">Carregando…</p>}
+            {error && <p className="p-5 text-red-600">{error}</p>}
+
+            {/* lista */}
+            {!loading && !error && (
+              <ul className="divide-y">
+                {results.length ? results.map((r, i) => (
+                  <li key={r.url+i}
+                      className={`p-5 cursor-pointer ${i===active ? "bg-indigo-50" : ""}`}
+                      onMouseEnter={()=>setActive(i)}
+                      onClick={()=>{ window.open(r.url, "_blank"); saveRecent(q); setRecent(loadRecent()); }}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-14 bg-gray-100 rounded overflow-hidden grid place-items-center flex-shrink-0">
+                        {r.cover ? <img src={r.cover} alt="" className="w-full h-full object-cover"/> : <span className="text-[10px] text-gray-400">sem capa</span>}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-base font-semibold text-gray-900">{highlight(r.title, debounced)}</h3>
+                        <p className="text-sm text-gray-600">{highlight(r.author, debounced)} {r.year !== "—" && <>• <span className="text-gray-500">{r.year}</span></>}</p>
+                      </div>
+                    </div>
+                  </li>
+                )) : (
+                  <li className="p-6 text-gray-500">Digite ao menos 2 caracteres…</li>
+                )}
+              </ul>
+            )}
+          </section>
+
+          {/* contexto para quem não sabe o que buscar */}
+          {!q && (
+            <>
+              <div className="mt-6">
+                <Chips
+                  title="Sugestões rápidas"
+                  items={["javascript", "harry potter", "design", "romance", "python", "startup"]}
+                  onClick={setFromChip}
+                />
+                <Chips
+                  title="Buscas recentes"
+                  items={recent}
+                  onClick={setFromChip}
+                />
+              </div>
+
+              <SubjectRow subject="programming" title="Descubra — Programação" onPick={setFromChip}/>
+              <SubjectRow subject="design" title="Descubra — Design" onPick={setFromChip}/>
+              <SubjectRow subject="romance" title="Descubra — Romance" onPick={setFromChip}/>
+            </>
+          )}
+        </>
+      );
+    }
+
+    // Monta a app
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<LiveSearch />);
+  </script>
+</body>
 </html>
