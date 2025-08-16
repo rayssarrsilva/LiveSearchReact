@@ -36,6 +36,9 @@ Este projeto foi desenvolvido para entregar uma experiência de busca **prática
 - **LocalStorage** → histórico persistente de buscas.  
 
 ---
+![apresentação Livesearch livros](https://github.com/user-attachments/assets/cfabf087-a3fb-4689-a6fb-d9020b895e5d)
+---
+
 
 ## ▶️ Como rodar  
 1. Clone este repositório.  
