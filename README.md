@@ -50,6 +50,6 @@ Este projeto foi desenvolvido para entregar uma experiência de busca **prática
 
 ## 🌐 Deploy  
 Acesse online pelo GitHub Pages:  
-👉 **rayssarrsilva.github.io/LiveSearchReact/**  
+👉 **[rayssarrsilva.github.io/LiveSearchReact/](https://rayssarrsilva.github.io/LiveSearchReact/)**  
 
 ---
